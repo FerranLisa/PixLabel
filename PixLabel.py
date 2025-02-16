@@ -1,10 +1,14 @@
-"""
-This program is an image labeling tool designed for annotating images with bounding boxes.
-It supports both manual and automatic labeling modes. Users can draw rectangles around objects
-in the images and assign class labels to them. The tool saves the annotations in both XML and YOLO
-formats. It also allows users to load existing annotations, adjust the threshold for automatic
-labeling, and generate YOLO files from XML annotations in a selected folder.
-"""
+# Summary:
+# This script is an image labeling tool built using PyQt5. It allows users to manually or automatically label images with bounding boxes and class characters.
+# Key features include:
+# - Loading images from a folder and displaying them in a QLabel.
+# - Drawing and managing rectangles on the images to label regions of interest.
+# - Saving and loading labels in XML format.
+# - Generating YOLO format label files.
+# - Navigating through images and managing labeled data.
+# - Displaying class distribution statistics using bar charts.
+# - Searching for specific labeled images and navigating to the next image with the least labeled class.
+# - Configurable settings and shortcuts for efficient labeling.
 
 import os
 import configparser
