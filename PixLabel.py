@@ -11,6 +11,7 @@
 # - Configurable settings and shortcuts for efficient labeling.
 
 import os
+import shutil
 import configparser
 import xml.etree.ElementTree as ET
 import cv2
@@ -83,9 +84,9 @@ class ImageLabel(QLabel):
                     if self.char_label_pos == "center":
                         text_rect = painter.boundingRect(screen_rect, Qt.AlignCenter, class_char)
                     elif self.char_label_pos == "top":
-                        text_rect = QRect(screen_rect.left(), screen_rect.top() - 50, screen_rect.width(), screen_rect.height())
+                        text_rect = QRect(screen_rect.left(), screen_rect.top() - 10, screen_rect.width(), 20)
                     elif self.char_label_pos == "bottom":
-                        text_rect = QRect(screen_rect.left(), screen_rect.bottom() - 20, screen_rect.width(), screen_rect.height())
+                        text_rect = QRect(screen_rect.left(), screen_rect.bottom() - 10, screen_rect.width(), 20)
                     painter.drawText(text_rect, Qt.AlignCenter, class_char)
             if self.drawing and self.start_point and self.end_point:
                 pen = QPen(Qt.red, 2, Qt.SolidLine)
@@ -557,7 +558,7 @@ class ImageLabel(QLabel):
             # Perform clustering to find two lines
             from sklearn.cluster import KMeans
             kmeans = KMeans(n_clusters=2).fit(np.array(y_positions).reshape(-1, 1))
-            labels = kmeans.labels_
+            labels = kmeans.labels()
 
             top_row = [centers[i][2] for i in range(len(centers)) if labels[i] == 0]
             bottom_row = [centers[i][2] for i in range(len(centers)) if labels[i] == 1]
@@ -622,6 +623,11 @@ class ImageLabelingTool(QMainWindow):
         self.next_unlabeled_image_action.triggered.connect(self.next_unlabeled_image)
         self.next_unlabeled_image_action.setShortcut('End')  # Add shortcut key 'End'
         self.file_menu.addAction(self.next_unlabeled_image_action)
+
+        self.export_labeled_dataset_action = QAction("Export Labeled Dataset", self)
+        self.export_labeled_dataset_action.setEnabled(False)  # Initially disabled
+        self.export_labeled_dataset_action.triggered.connect(self.export_labeled_dataset)
+        self.file_menu.addAction(self.export_labeled_dataset_action)
 
         self.objects_menu = self.menu.addMenu("Objects")
 
@@ -729,6 +735,54 @@ class ImageLabelingTool(QMainWindow):
     def set_label_position(self, position):
         self.canvas.char_label_pos = position
         self.canvas.update()
+
+    def export_labeled_dataset(self):
+        output_folder = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+        if not output_folder:
+            return
+
+        # Check if the output folder is not empty
+        if os.listdir(output_folder):
+            reply = QMessageBox.question(self, 'Confirm', 'The selected folder is not empty. Do you want to remove its content?', QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.No:
+                return
+            else:
+                # Remove the content of the folder
+                for filename in os.listdir(output_folder):
+                    file_path = os.path.join(output_folder, filename)
+                    try:
+                        if os.path.isfile(file_path) or os.path.islink(file_path):
+                            os.unlink(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                    except Exception as e:
+                        QMessageBox.critical(self, "Error", f"Failed to delete {file_path}. Reason: {e}")
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)  # Change cursor to progress clock
+
+        xml_files_exported = 0
+
+        try:
+            for image_file in self.image_files:
+                base_name = os.path.splitext(os.path.basename(image_file))[0]
+                xml_file = os.path.join(self.image_folder, base_name + ".xml")
+                txt_file = os.path.join(self.image_folder, base_name + ".txt")
+                if os.path.exists(xml_file) and os.path.exists(txt_file):
+                    # Copy XML and TXT files
+                    shutil.copy(xml_file, os.path.join(output_folder, base_name + ".xml"))
+                    shutil.copy(txt_file, os.path.join(output_folder, base_name + ".txt"))
+
+                    # Convert image to JPEG and save
+                    image = cv2.imread(image_file)
+                    jpeg_file = os.path.join(output_folder, base_name + ".jpg")
+                    cv2.imwrite(jpeg_file, image)
+
+                    xml_files_exported += 1
+        finally:
+            QApplication.restoreOverrideCursor()  # Restore original cursor
+
+        # Display report dialog
+        QMessageBox.information(self, "Export Complete", f"Exported {xml_files_exported} labeled image files.")
 
     def load_config(self):
         if os.path.exists(self.config_file_path):
@@ -971,9 +1025,11 @@ class ImageLabelingTool(QMainWindow):
                 # Update canvas class labels
                 self.canvas.class_labels = self.class_labels 
 
-                # Enable folder selection
+                # Enable additional file menu options
                 self.save_xml_action.setEnabled(True)  # Enable save XML
                 self.load_xml_action.setEnabled(True)  # Enable load XML
+                self.next_unlabeled_image_action.setEnabled(True)  # Enable next unlabeled image
+                self.export_labeled_dataset_action.setEnabled(True)  # Enable export
 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load ground truth: {e}")
@@ -1148,4 +1204,3 @@ if __name__ == "__main__":
     window = ImageLabelingTool()
     window.show()
     app.exec_()
-    
