@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 from PyQt5.QtCore import QEvent, Qt, QRect, QTimer
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QStatusBar, QAction, QFileDialog, QLabel, 
-                             QVBoxLayout, QWidget, QPushButton, QShortcut, QMessageBox, QDialog, QToolTip)
+                             QVBoxLayout, QWidget, QPushButton, QShortcut, QMessageBox, QDialog, QToolTip, QRadioButton, QButtonGroup, QVBoxLayout)
 from PyQt5.QtGui import (QCursor, QPixmap, QPainter, QPen, QColor, QFont, QImage, QKeySequence)
 from PyQt5.QtChart import (QChart, QChartView, QBarSet, QBarSeries, QBarCategoryAxis, QValueAxis)
 
@@ -45,6 +45,7 @@ class ImageLabel(QLabel):
         self.changes_made = False  # Flag to track changes
         self.white_chars = False  # Initialize with False
         self.setCursor(Qt.CrossCursor)  # Set initial cursor to CrossCursor
+        self.char_label_pos = "center"  # Default label position
 
     def setPixmap(self, pixmap, image_path):
         self.original_pixmap = pixmap
@@ -79,7 +80,12 @@ class ImageLabel(QLabel):
                 if class_char:
                     painter.setPen(QPen(Qt.blue))  # Change color to blue
                     painter.setFont(QFont("SimHei", 20))  # Set font to SimHei for Chinese characters
-                    text_rect = painter.boundingRect(screen_rect, Qt.AlignCenter, class_char)
+                    if self.char_label_pos == "center":
+                        text_rect = painter.boundingRect(screen_rect, Qt.AlignCenter, class_char)
+                    elif self.char_label_pos == "top":
+                        text_rect = QRect(screen_rect.left(), screen_rect.top() - 50, screen_rect.width(), screen_rect.height())
+                    elif self.char_label_pos == "bottom":
+                        text_rect = QRect(screen_rect.left(), screen_rect.bottom() - 20, screen_rect.width(), screen_rect.height())
                     painter.drawText(text_rect, Qt.AlignCenter, class_char)
             if self.drawing and self.start_point and self.end_point:
                 pen = QPen(Qt.red, 2, Qt.SolidLine)
@@ -338,9 +344,6 @@ class ImageLabel(QLabel):
             class_char = obj.find("name").text
             color = self.get_color_for_class(class_char)  # Update color based on class
             self.rectangles.append((rect, color, class_char))
-
-            # Debug print statements
-            print(f"Loading rect: {rect}, view coordinates: ({xmin_view}, {ymin_view}, {xmax_view}, {ymax_view})")
 
         self.update()
         return threshold
@@ -655,6 +658,11 @@ class ImageLabelingTool(QMainWindow):
         self.next_least_labeled_action.setShortcut(Qt.Key_Enter)
         self.statistics_menu.addAction(self.next_least_labeled_action)
 
+        self.options_menu = self.menu.addMenu("Options")
+        self.label_position_action = QAction("Label Position", self)
+        self.label_position_action.triggered.connect(self.label_position)
+        self.options_menu.addAction(self.label_position_action)
+
         self.mouse_position_layout = QVBoxLayout()
         
         self.canvas = ImageLabel(self)
@@ -687,6 +695,40 @@ class ImageLabelingTool(QMainWindow):
         # Connect the remove_all_rectangles_action after initializing self.canvas
         self.remove_all_rectangles_action.triggered.connect(self.canvas.remove_all_rectangles)
         self.white_chars_option.triggered.connect(self.canvas.toggle_white_chars)
+
+    def label_position(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Label Position")
+        layout = QVBoxLayout()
+
+        top_radio = QRadioButton("Top")
+        center_radio = QRadioButton("Center")
+        bottom_radio = QRadioButton("Bottom")
+
+        if self.canvas.char_label_pos == "top":
+            top_radio.setChecked(True)
+        elif self.canvas.char_label_pos == "center":
+            center_radio.setChecked(True)
+        elif self.canvas.char_label_pos == "bottom":
+            bottom_radio.setChecked(True)
+
+        button_group = QButtonGroup(dialog)
+        button_group.addButton(top_radio)
+        button_group.addButton(center_radio)
+        button_group.addButton(bottom_radio)
+
+        layout.addWidget(top_radio)
+        layout.addWidget(center_radio)
+        layout.addWidget(bottom_radio)
+
+        button_group.buttonClicked.connect(lambda: self.set_label_position(button_group.checkedButton().text().lower()))
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+    def set_label_position(self, position):
+        self.canvas.char_label_pos = position
+        self.canvas.update()
 
     def load_config(self):
         if os.path.exists(self.config_file_path):
@@ -1106,3 +1148,4 @@ if __name__ == "__main__":
     window = ImageLabelingTool()
     window.show()
     app.exec_()
+    
